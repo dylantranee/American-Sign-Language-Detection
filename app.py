@@ -18,7 +18,7 @@ datasetdir = "model/dataset/dataset 1"
 def get_args():
     parser = argparse.ArgumentParser()
 
-    parser.add_argument("--device", type=int, default=0)
+    parser.add_argument("--device", type=int, default=1)
     parser.add_argument("--width", help="cap width", type=int, default=960)
     parser.add_argument("--height", help="cap height", type=int, default=540)
 
@@ -42,6 +42,7 @@ def get_args():
 
 
 def main():
+    
     # Argument parsing #################################################################
     args = get_args()
 
@@ -55,10 +56,39 @@ def main():
 
     use_brect = True
 
-    # Camera preparation ###############################################################
-    cap = cv.VideoCapture(cap_device)
+    # # Camera preparation ###############################################################
+    # cap = cv.VideoCapture(cap_device)
+    # cap.set(cv.CAP_PROP_FRAME_WIDTH, cap_width)
+    # cap.set(cv.CAP_PROP_FRAME_HEIGHT, cap_height)
+    
+    # Camera preparation - macOS optimized
+    print(f"Trying to open camera device: {cap_device}")
+    
+    # Thử với AVFoundation backend cho macOS
+    cap = cv.VideoCapture(cap_device, cv.CAP_AVFOUNDATION)
+    
+    if not cap.isOpened():
+        print("Failed with AVFoundation, trying default...")
+        cap = cv.VideoCapture(cap_device)
+    
+    if not cap.isOpened():
+        print("Cannot open camera. Trying device 1...")
+        cap = cv.VideoCapture(1)
+    
+    if not cap.isOpened():
+        print("Cannot open any camera device!")
+        return
+    
+    print(f"Camera opened successfully: {cap.isOpened()}")
+    
+    # Set camera properties
     cap.set(cv.CAP_PROP_FRAME_WIDTH, cap_width)
     cap.set(cv.CAP_PROP_FRAME_HEIGHT, cap_height)
+    
+    # Verify camera settings
+    actual_width = cap.get(cv.CAP_PROP_FRAME_WIDTH)
+    actual_height = cap.get(cv.CAP_PROP_FRAME_HEIGHT)
+    print(f"Camera resolution: {actual_width}x{actual_height}")
 
     # Model load #############################################################
     mp_hands = mp.solutions.hands
