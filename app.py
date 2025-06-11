@@ -3,6 +3,7 @@ import csv
 import copy
 import argparse
 import itertools
+from flask import Flask, render_template, Response, jsonify
 
 import cv2 as cv
 import numpy as np
@@ -11,9 +12,103 @@ import mediapipe as mp
 from utils.cvfpscalc import CvFpsCalc
 from model.keypoint_classifier.keypoint_classifier import KeyPointClassifier
 
+app = Flask(__name__)
+
+# Global variables for camera and model
+camera = None
+mp_hands = None
+hands = None
+keypoint_classifier = None
+keypoint_classifier_labels = None
+
+def init_camera():
+    global camera, mp_hands, hands, keypoint_classifier, keypoint_classifier_labels
+    # Initialize camera with macOS specific settings
+    camera = cv.VideoCapture(1, cv.CAP_AVFOUNDATION)
+    if not camera.isOpened():
+        print("Failed to open camera with AVFoundation, trying default...")
+        camera = cv.VideoCapture(0)
+    if not camera.isOpened():
+        print("Failed to open camera with default backend, trying device 1...")
+        camera = cv.VideoCapture(1)
+    if not camera.isOpened():
+        raise RuntimeError("Cannot open camera. Please check your camera connection.")
+    # Set camera properties
+    camera.set(cv.CAP_PROP_FRAME_WIDTH, 960)
+    camera.set(cv.CAP_PROP_FRAME_HEIGHT, 540)
+    # Initialize MediaPipe
+    mp_hands = mp.solutions.hands
+    hands = mp_hands.Hands(
+        static_image_mode=False,
+        max_num_hands=2,
+        min_detection_confidence=0.7,
+        min_tracking_confidence=0.5,
+    )
+    # Initialize classifier
+    keypoint_classifier = KeyPointClassifier()
+    # Read labels
+    with open("model/keypoint_classifier/keypoint_classifier_label.csv", encoding="utf-8-sig") as f:
+        keypoint_classifier_labels = [row[0] for row in csv.reader(f)]
+
+init_camera()
 
 datasetdir = "model/dataset/dataset 1"
 
+def generate_frames():
+    global camera, hands, keypoint_classifier, keypoint_classifier_labels
+    
+    while True:
+        success, frame = camera.read()
+        if not success:
+            break
+        else:
+            # Mirror the frame
+            frame = cv.flip(frame, 1)
+            
+            # Convert to RGB
+            image = cv.cvtColor(frame, cv.COLOR_BGR2RGB)
+            image.flags.writeable = False
+            
+            # Process the frame
+            results = hands.process(image)
+            image.flags.writeable = True
+            
+            if results.multi_hand_landmarks is not None:
+                for hand_landmarks, handedness in zip(results.multi_hand_landmarks, results.multi_handedness):
+                    # Calculate bounding box
+                    brect = calc_bounding_rect(frame, hand_landmarks)
+                    
+                    # Calculate landmarks
+                    landmark_list = calc_landmark_list(frame, hand_landmarks)
+                    
+                    # Pre-process landmarks
+                    pre_processed_landmark_list = pre_process_landmark(landmark_list)
+                    
+                    # Classify hand sign
+                    hand_sign_id = keypoint_classifier(pre_processed_landmark_list)
+                    
+                    # Draw bounding box and info
+                    frame = draw_bounding_rect(True, frame, brect)
+                    frame = draw_info_text(
+                        frame,
+                        brect,
+                        handedness,
+                        keypoint_classifier_labels[hand_sign_id]
+                    )
+            
+            ret, buffer = cv.imencode('.jpg', frame)
+            frame = buffer.tobytes()
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n')
+
+@app.route('/')
+def index():
+    return render_template('index.html')
+
+@app.route('/video_feed')
+def video_feed():
+    return Response(generate_frames(),
+                    mimetype='multipart/x-mixed-replace; boundary=frame')
 
 def get_args():
     parser = argparse.ArgumentParser()
@@ -684,4 +779,4 @@ def draw_info(image, fps, mode, number):
 
 
 if __name__ == "__main__":
-    main()
+    app.run(host='0.0.0.0', port=5000)
