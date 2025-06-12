@@ -1,14 +1,20 @@
-class CameraManager {
+import { hasCamera, handleError } from './helpers.js';
+
+class Camera {
     constructor() {
-        this.video = document.getElementById('camera-feed');
+        this.videoElement = document.querySelector('.video-feed');
         this.canvas = document.getElementById('detection-canvas');
         this.ctx = this.canvas.getContext('2d');
         this.stream = null;
-        this.isRunning = false;
+        this.isInitialized = false;
     }
 
-    async startCamera() {
+    async initialize() {
         try {
+            if (!await hasCamera()) {
+                throw new Error('No camera found on this device');
+            }
+
             this.stream = await navigator.mediaDevices.getUserMedia({
                 video: {
                     width: { ideal: 1280 },
@@ -16,60 +22,104 @@ class CameraManager {
                     facingMode: 'user'
                 }
             });
-            
-            this.video.srcObject = this.stream;
-            this.isRunning = true;
-            
+
+            this.videoElement.srcObject = this.stream;
+            await this.videoElement.play();
+
             // Set canvas dimensions to match video
-            this.video.onloadedmetadata = () => {
-                this.canvas.width = this.video.videoWidth;
-                this.canvas.height = this.video.videoHeight;
-            };
-            
+            this.videoElement.addEventListener('loadedmetadata', () => {
+                this.canvas.width = this.videoElement.videoWidth;
+                this.canvas.height = this.videoElement.videoHeight;
+            });
+
+            this.isInitialized = true;
             return true;
         } catch (error) {
-            console.error('Lỗi truy cập camera:', error);
-            helpers.showNotification('Không thể truy cập camera', 'error');
+            handleError(error, 'Camera initialization');
             return false;
         }
     }
 
-    stopCamera() {
+    async stop() {
         if (this.stream) {
             this.stream.getTracks().forEach(track => track.stop());
-            this.video.srcObject = null;
-            this.isRunning = false;
+            this.stream = null;
         }
+        this.isInitialized = false;
     }
 
     getFrame() {
-        if (!this.isRunning) return null;
-        
-        this.ctx.drawImage(this.video, 0, 0, this.canvas.width, this.canvas.height);
+        if (!this.isInitialized) return null;
+
+        // Draw the current video frame to the canvas
+        this.ctx.drawImage(
+            this.videoElement,
+            0, 0,
+            this.canvas.width,
+            this.canvas.height
+        );
+
+        // Return the canvas data
         return this.canvas;
     }
 
-    drawDetectionBox(x, y, width, height, label) {
-        this.ctx.strokeStyle = '#00ff00';
-        this.ctx.lineWidth = 2;
-        this.ctx.strokeRect(x, y, width, height);
+    // Draw detection results on the canvas
+    drawDetectionResults(results) {
+        if (!this.isInitialized || !results) return;
+
+        // Clear previous drawings
+        this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
         
-        // Draw label
-        this.ctx.fillStyle = '#00ff00';
-        this.ctx.font = '16px Arial';
-        this.ctx.fillText(label, x, y - 5);
+        // Draw the current video frame
+        this.ctx.drawImage(
+            this.videoElement,
+            0, 0,
+            this.canvas.width,
+            this.canvas.height
+        );
+
+        // Draw detection results
+        if (results.landmarks) {
+            this.drawLandmarks(results.landmarks);
+        }
+
+        if (results.boundingBox) {
+            this.drawBoundingBox(results.boundingBox);
+        }
+    }
+
+    // Draw hand landmarks
+    drawLandmarks(landmarks) {
+        this.ctx.strokeStyle = '#a855f7';
+        this.ctx.lineWidth = 2;
+
+        landmarks.forEach(landmark => {
+            this.ctx.beginPath();
+            this.ctx.arc(
+                landmark.x * this.canvas.width,
+                landmark.y * this.canvas.height,
+                3, 0, 2 * Math.PI
+            );
+            this.ctx.fillStyle = '#a855f7';
+            this.ctx.fill();
+        });
+    }
+
+    // Draw bounding box around detected hand
+    drawBoundingBox(box) {
+        const { x, y, width, height } = box;
+        
+        this.ctx.strokeStyle = '#a855f7';
+        this.ctx.lineWidth = 2;
+        this.ctx.strokeRect(
+            x * this.canvas.width,
+            y * this.canvas.height,
+            width * this.canvas.width,
+            height * this.canvas.height
+        );
     }
 }
 
-// Initialize camera manager
-const cameraManager = new CameraManager();
-
-// Start camera automatically when page loads
-window.addEventListener('load', async () => {
-    await cameraManager.startCamera();
-});
-
-// Stop camera when page is unloaded
-window.addEventListener('beforeunload', () => {
-    cameraManager.stopCamera();
-}); 
+// Create and export a singleton instance
+const camera = new Camera();
+export default camera; 

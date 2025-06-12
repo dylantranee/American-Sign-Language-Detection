@@ -1,51 +1,119 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="vi">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>American Sign Language Detection</title>
-    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
-    <style>
-        .video-container {
-            position: relative;
-            width: 100%;
-            max-width: 960px;
-            margin: 0 auto;
-        }
-        .video-feed {
-            width: 100%;
-            border-radius: 8px;
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
-        }
-    </style>
+    <title>resignify - Nhận Diện Ngôn Ngữ Ký Hiệu Việt Nam</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.socket.io/4.7.2/socket.io.min.js"></script>
 </head>
-<body class="bg-gray-100 min-h-screen">
-    <div class="container mx-auto px-4 py-8">
-        <header class="text-center mb-8">
-            <h1 class="text-4xl font-bold text-gray-800 mb-2">American Sign Language Detection</h1>
-            <p class="text-gray-600">Real-time hand gesture recognition using computer vision</p>
-        </header>
+<body>
+    <!-- Balloon Decorations -->
+    <div class="balloon"></div>
+    <div class="balloon"></div>
+    <div class="balloon"></div>
+    <div class="balloon"></div>
+    <div class="balloon"></div>
+    <div class="balloon"></div>
 
-        <main class="max-w-4xl mx-auto">
-            <div class="bg-white rounded-lg shadow-lg p-6">
-                <div class="video-container">
-                    <img src="{{ url_for('video_feed') }}" class="video-feed" alt="Video feed">
-                </div>
-                
-                <div class="mt-6 text-center">
-                    <h2 class="text-2xl font-semibold text-gray-700 mb-4">How to use</h2>
-                    <ul class="text-gray-600 space-y-2">
-                        <li>• Position your hand in front of the camera</li>
-                        <li>• Make sure your hand is well-lit and clearly visible</li>
-                        <li>• The system will detect and classify your hand gestures in real-time</li>
-                    </ul>
-                </div>
+    <!-- Bubble Decorations -->
+    <div class="bubble pink b1"></div>
+    <div class="bubble purple b2"></div>
+    <div class="bubble yellow b3"></div>
+    <div class="bubble pink b4"></div>
+    <div class="bubble purple b5"></div>
+
+    <nav class="navigation">
+        <div class="nav-container">
+            <div class="nav-brand">
+                <a href="/">
+                    <h1>resignify</h1>
+                </a>
+            </div>
+            <div class="nav-destinations">
+                <a href="#features" class="nav-link">Tính năng</a>
+                <a href="#how-it-works" class="nav-link">Cách hoạt động</a>
+                <a href="/" class="nav-link">Bắt đầu</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container">
+        <main class="main-content">
+            <div class="left-panel">
+                <section class="mode-section">
+                    <div class="mode-buttons">
+                        <button id="letter-mode" class="mode-button active">Nhận diện chữ cái</button>
+                        <button id="sentence-mode" class="mode-button">Nhận diện câu</button>
+                    </div>
+                </section>
+
+                <section class="camera-section">
+                    <div class="camera-container">
+                        <img src="{{ url_for('video_feed') }}" class="video-feed" alt="Video feed">
+                        <canvas id="detection-canvas"></canvas>
+                    </div>
+                </section>
+            </div>
+
+            <div class="right-panel">
+                <section class="results-section">
+                    <div class="detection-results">
+                        <h2>Kết quả nhận diện</h2>
+                        <div id="results-container">
+                            <div class="detection-result placeholder">
+                                <p>Đang chờ nhận diện...</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
             </div>
         </main>
-
-        <footer class="mt-8 text-center text-gray-600">
-            <p>Built with Flask, OpenCV, and MediaPipe</p>
-        </footer>
     </div>
+
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <h2>resignify</h2>
+                    <p>Kết nối cộng đồng thông qua công nghệ</p>
+                </div>
+                <div class="footer-links">
+                    <div class="footer-column">
+                        <h4>Liên kết</h4>
+                        <a href="#features">Tính năng</a>
+                        <a href="#how-it-works">Cách hoạt động</a>
+                        <a href="/">Ứng dụng</a>
+                    </div>
+                    <div class="footer-column">
+                        <h4>Liên hệ</h4>
+                        <a href="mailto:contact@resignify.com">Email</a>
+                        <a href="https://github.com/yourusername/resignify">GitHub</a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2024 resignify. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="{{ url_for('static', filename='js/helpers.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/camera.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/detection.js') }}"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            const videoFeed = document.querySelector('.video-feed');
+            const loadingIndicator = document.querySelector('.video-loading');
+
+            videoFeed.addEventListener('error', function() {
+                loadingIndicator.textContent = 'Lỗi tải video';
+                loadingIndicator.style.display = 'block';
+            });
+        });
+    </script>
 </body>
 </html> 
